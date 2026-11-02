@@ -1,0 +1,547 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#0f766e">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="description" content="Track daily expenses across multiple accounts. Works offline.">
+<link rel="icon" href="icon-192.png" type="image/png">
+<title>Paisa Tracker</title>
+<style>
+:root{
+  --bg:#f5f7f6; --surface:#fff; --text:#12201d; --muted:#62736f; --line:#e1e8e5;
+  --brand:#0f766e; --brand-ink:#fff; --pos:#15803d; --neg:#b91c1c; --warn:#b45309;
+  --shadow:0 1px 3px rgba(0,0,0,.08);
+}
+@media (prefers-color-scheme:dark){
+  :root{--bg:#0e1514; --surface:#16201e; --text:#e6efec; --muted:#8fa49f; --line:#25332f;
+    --brand:#2dd4bf; --brand-ink:#04211d; --pos:#4ade80; --neg:#f87171; --shadow:none}
+}
+*{box-sizing:border-box}
+html,body{margin:0}
+body{background:var(--bg);color:var(--text);font:16px/1.4 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+.top{position:sticky;top:0;z-index:5;display:flex;justify-content:space-between;align-items:center;
+  padding:12px 16px;padding-top:calc(12px + env(safe-area-inset-top));background:var(--brand);color:var(--brand-ink)}
+.top h1{font-size:1.15rem;margin:0}
+.net{font-size:.75rem;padding:3px 10px;border-radius:99px;background:rgba(255,255,255,.2)}
+.net.offline{background:#fde68a;color:#78350f}
+main{max-width:720px;margin:0 auto;padding:12px 16px}
+.view{display:none}.view.active{display:block}
+h2{font-size:.95rem;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);margin:20px 0 8px}
+.muted{color:var(--muted)}.small-t{font-size:.8rem}
+.pos{color:var(--pos)}.neg{color:var(--neg)}
+
+.month-bar{display:flex;align-items:center;justify-content:center;gap:16px;margin:4px 0 12px}
+.icon-btn{border:1px solid var(--line);background:var(--surface);color:var(--text);width:36px;height:36px;border-radius:50%;font-size:1.3rem;cursor:pointer}
+
+.summary{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.card{background:var(--surface);border-radius:12px;padding:10px;box-shadow:var(--shadow);display:flex;flex-direction:column;gap:2px;min-width:0}
+.card span{font-size:.75rem;color:var(--muted)}
+.card b{font-size:1.05rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+.acc-strip{display:flex;gap:8px;overflow-x:auto;padding-bottom:4px;scroll-snap-type:x proximity}
+.acc-chip{flex:0 0 auto;min-width:130px;background:var(--surface);border-radius:12px;padding:10px 12px;box-shadow:var(--shadow);scroll-snap-align:start}
+.acc-chip small{display:block;color:var(--muted)}
+.acc-chip b{font-size:1.05rem}
+
+.cat-bars{display:flex;flex-direction:column;gap:8px}
+.bar-row{display:grid;grid-template-columns:100px 1fr auto;gap:8px;align-items:center;font-size:.9rem}
+.bar{height:10px;border-radius:6px;background:var(--line);overflow:hidden}
+.bar i{display:block;height:100%;background:var(--brand)}
+
+.list{display:flex;flex-direction:column;gap:6px}
+.day{font-size:.8rem;color:var(--muted);margin:10px 2px 2px}
+.item{display:flex;align-items:center;gap:10px;background:var(--surface);border-radius:12px;padding:10px 12px;box-shadow:var(--shadow);cursor:pointer;border:0;text-align:left;color:inherit;font:inherit;width:100%}
+.item .grow{flex:1;min-width:0}
+.item .t{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .s{font-size:.8rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.item .amt{font-weight:700;white-space:nowrap}
+.empty{text-align:center;color:var(--muted);padding:24px 0}
+
+.filters{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px}
+.filters input{grid-column:1/-1}
+select,input{font:inherit;color:var(--text);background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:10px;width:100%}
+.row-between{display:flex;justify-content:space-between;align-items:center}
+.row-between h2{margin:12px 0}
+
+.btn{font:inherit;font-weight:600;border:0;border-radius:10px;padding:12px 16px;background:var(--brand);color:var(--brand-ink);cursor:pointer;text-align:center;display:block}
+.btn.small{padding:8px 14px}
+.btn.ghost{background:transparent;color:var(--brand);border:1px solid var(--brand)}
+.btn.danger{background:transparent;color:var(--neg);border:1px solid var(--neg)}
+.stack{display:flex;flex-direction:column;gap:8px}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{background:var(--surface);border:1px solid var(--line);border-radius:99px;padding:4px 10px;font-size:.85rem;display:flex;gap:6px;align-items:center}
+.chip button{border:0;background:none;color:var(--muted);cursor:pointer;font-size:1rem;padding:0}
+.inline-form{display:flex;gap:8px;margin-top:10px}
+
+.fab{position:fixed;right:18px;bottom:calc(80px + env(safe-area-inset-bottom));width:56px;height:56px;border-radius:50%;
+  border:0;background:var(--brand);color:var(--brand-ink);font-size:2rem;line-height:1;box-shadow:0 4px 12px rgba(0,0,0,.3);cursor:pointer;z-index:6}
+.tabs{position:fixed;bottom:0;left:0;right:0;display:flex;background:var(--surface);border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom);z-index:5}
+.tabs button{flex:1;border:0;background:none;color:var(--muted);padding:8px 2px;font-size:.7rem;cursor:pointer;display:flex;flex-direction:column;align-items:center;gap:2px}
+.tabs button i{font-style:normal;font-size:1.2rem}
+.tabs button.active{color:var(--brand);font-weight:700}
+
+dialog{border:0;border-radius:16px;padding:18px;width:min(92vw,420px);background:var(--surface);color:var(--text)}
+dialog::backdrop{background:rgba(0,0,0,.45)}
+dialog h3{margin:0 0 12px}
+dialog label{display:block;font-size:.85rem;color:var(--muted);margin-bottom:10px}
+dialog label input,dialog label select{margin-top:4px;color:var(--text)}
+.seg{display:flex;border:1px solid var(--line);border-radius:10px;overflow:hidden;margin-bottom:12px}
+.seg button{flex:1;border:0;background:none;color:var(--text);padding:9px;cursor:pointer;font:inherit}
+.seg button.on{background:var(--brand);color:var(--brand-ink);font-weight:700}
+.dlg-actions{display:flex;gap:8px;align-items:center;margin-top:6px}
+.spacer{flex:1}
+
+.toast{position:fixed;left:50%;bottom:calc(150px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);
+  background:#222;color:#fff;padding:10px 16px;border-radius:10px;opacity:0;pointer-events:none;transition:.25s;z-index:20;max-width:90vw}
+.toast.show{opacity:1;transform:translateX(-50%)}
+</style>
+</head>
+<body>
+<header class="top">
+  <h1>Paisa Tracker</h1>
+  <span id="net" class="net online" title="Connection status">Online</span>
+</header>
+
+<main>
+  <!-- HOME -->
+  <section id="view-home" class="view active">
+    <div class="month-bar">
+      <button class="icon-btn" data-month="-1" aria-label="Previous month">‹</button>
+      <strong id="monthLabel"></strong>
+      <button class="icon-btn" data-month="1" aria-label="Next month">›</button>
+    </div>
+    <div class="summary">
+      <div class="card"><span>Spent</span><b id="sumExp" class="neg">₹0</b></div>
+      <div class="card"><span>Income</span><b id="sumInc" class="pos">₹0</b></div>
+      <div class="card"><span>Net worth</span><b id="sumNet">₹0</b></div>
+    </div>
+    <h2>Accounts</h2>
+    <div id="homeAccounts" class="acc-strip"></div>
+    <h2>Spending by category</h2>
+    <div id="catBars" class="cat-bars"></div>
+    <h2>Recent</h2>
+    <div id="recent" class="list"></div>
+  </section>
+
+  <!-- TRANSACTIONS -->
+  <section id="view-txns" class="view">
+    <div class="filters">
+      <select id="fAccount" aria-label="Filter by account"></select>
+      <select id="fType" aria-label="Filter by type">
+        <option value="">All types</option>
+        <option value="expense">Expenses</option>
+        <option value="income">Income</option>
+        <option value="transfer">Transfers</option>
+      </select>
+      <input id="fSearch" type="search" placeholder="Search notes / category">
+    </div>
+    <div class="month-bar">
+      <button class="icon-btn" data-month="-1" aria-label="Previous month">‹</button>
+      <strong class="monthLabel2"></strong>
+      <button class="icon-btn" data-month="1" aria-label="Next month">›</button>
+    </div>
+    <div id="txnList" class="list"></div>
+  </section>
+
+  <!-- ACCOUNTS -->
+  <section id="view-accounts" class="view">
+    <div class="row-between">
+      <h2>Your accounts</h2>
+      <button id="addAccountBtn" class="btn small">+ Account</button>
+    </div>
+    <div id="accountList" class="list"></div>
+  </section>
+
+  <!-- SETTINGS -->
+  <section id="view-more" class="view">
+    <h2>Data &amp; backup</h2>
+    <p class="muted">Everything is stored on this device and works offline. Export a backup regularly.</p>
+    <div class="stack">
+      <button id="exportJson" class="btn">Export backup (JSON)</button>
+      <button id="exportCsv" class="btn ghost">Export transactions (CSV)</button>
+      <label class="btn ghost file">Import backup (JSON)<input id="importJson" type="file" accept="application/json" hidden></label>
+      <button id="installBtn" class="btn ghost" hidden>Install app</button>
+      <button id="resetBtn" class="btn danger">Erase all data</button>
+    </div>
+    <h2>Categories</h2>
+    <div id="catList" class="chips"></div>
+    <form id="catForm" class="inline-form">
+      <input id="newCat" placeholder="New category" maxlength="24" required>
+      <button class="btn small">Add</button>
+    </form>
+    <p class="muted small-t" id="verInfo"></p>
+  </section>
+</main>
+
+<button id="fab" class="fab" aria-label="Add transaction">+</button>
+
+<nav class="tabs">
+  <button data-view="home" class="active"><i>🏠</i>Home</button>
+  <button data-view="txns"><i>🧾</i>Transactions</button>
+  <button data-view="accounts"><i>🏦</i>Accounts</button>
+  <button data-view="more"><i>⚙️</i>More</button>
+</nav>
+
+<!-- Transaction dialog -->
+<dialog id="txnDialog">
+  <form id="txnForm" method="dialog">
+    <h3 id="txnTitle">Add transaction</h3>
+    <div class="seg" id="typeSeg">
+      <button type="button" data-type="expense" class="on">Expense</button>
+      <button type="button" data-type="income">Income</button>
+      <button type="button" data-type="transfer">Transfer</button>
+    </div>
+    <label>Amount (₹)<input id="tAmount" type="number" inputmode="decimal" step="0.01" min="0.01" required></label>
+    <label><span id="tAccLabel">Account</span><select id="tAccount" required></select></label>
+    <label id="toWrap" hidden>To account<select id="tTo"></select></label>
+    <label id="catWrap">Category<select id="tCategory"></select></label>
+    <label>Date<input id="tDate" type="date" required></label>
+    <label>Note<input id="tNote" maxlength="80" placeholder="Optional"></label>
+    <div class="dlg-actions">
+      <button type="button" id="tDelete" class="btn danger small" hidden>Delete</button>
+      <span class="spacer"></span>
+      <button type="button" id="tCancel" class="btn ghost small">Cancel</button>
+      <button type="submit" class="btn small">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Account dialog -->
+<dialog id="accDialog">
+  <form id="accForm" method="dialog">
+    <h3 id="accTitle">Add account</h3>
+    <label>Name<input id="aName" maxlength="24" required placeholder="e.g. HDFC Savings"></label>
+    <label>Type
+      <select id="aType">
+        <option>Cash</option><option>Bank</option><option>UPI / Wallet</option><option>Credit card</option><option>Other</option>
+      </select>
+    </label>
+    <label>Opening balance (₹)<input id="aOpen" type="number" inputmode="decimal" step="0.01" value="0"></label>
+    <div class="dlg-actions">
+      <button type="button" id="aDelete" class="btn danger small" hidden>Delete</button>
+      <span class="spacer"></span>
+      <button type="button" id="aCancel" class="btn ghost small">Cancel</button>
+      <button type="submit" class="btn small">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<div id="toast" class="toast" role="status" aria-live="polite"></div>
+<script>
+(() => {
+'use strict';
+
+const KEY = 'paisa-tracker.v1';
+const VERSION = 'v1';
+const DEFAULT_CATS = ['Food', 'Groceries', 'Transport', 'Bills', 'Rent', 'Shopping', 'Health', 'Entertainment', 'Education', 'Other'];
+
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Date.now().toString(36) + Math.random().toString(36).slice(2));
+const inr = n => '₹' + Number(n).toLocaleString('en-IN', { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+const todayStr = () => { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
+const el = (tag, props = {}, ...kids) => {
+  const e = document.createElement(tag);
+  Object.entries(props).forEach(([k, v]) => k === 'class' ? e.className = v : k === 'text' ? e.textContent = v : e.setAttribute(k, v));
+  kids.forEach(k => e.append(k));
+  return e;
+};
+
+/* ---------- State ---------- */
+let state = load();
+let month = new Date(); month.setDate(1);
+let editingTxn = null, editingAcc = null, txnType = 'expense';
+
+function fresh() {
+  return { accounts: [{ id: uid(), name: 'Cash', type: 'Cash', opening: 0 }], txns: [], categories: [...DEFAULT_CATS] };
+}
+function load() {
+  try {
+    const s = JSON.parse(localStorage.getItem(KEY));
+    if (s && Array.isArray(s.accounts) && Array.isArray(s.txns)) { s.categories = s.categories || [...DEFAULT_CATS]; return s; }
+  } catch (e) { /* ignore */ }
+  return fresh();
+}
+function save() {
+  try { localStorage.setItem(KEY, JSON.stringify(state)); }
+  catch (e) { toast('Could not save – storage full or blocked'); }
+  render();
+}
+
+/* ---------- Helpers ---------- */
+const accById = id => state.accounts.find(a => a.id === id);
+const accName = id => (accById(id) || { name: '(deleted)' }).name;
+function balance(id) {
+  const a = accById(id); let b = Number(a.opening) || 0;
+  for (const t of state.txns) {
+    if (t.type === 'income' && t.account === id) b += t.amount;
+    else if (t.type === 'expense' && t.account === id) b -= t.amount;
+    else if (t.type === 'transfer') { if (t.account === id) b -= t.amount; if (t.to === id) b += t.amount; }
+  }
+  return b;
+}
+const monthKey = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+const inMonth = t => t.date.startsWith(monthKey(month));
+const monthText = () => month.toLocaleString('en-IN', { month: 'long', year: 'numeric' });
+const sortTxns = arr => arr.sort((a, b) => b.date.localeCompare(a.date) || (b.ts || 0) - (a.ts || 0));
+
+let toastTimer;
+function toast(msg) {
+  const t = $('#toast'); t.textContent = msg; t.classList.add('show');
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+}
+
+/* ---------- Render ---------- */
+function txnItem(t) {
+  const sign = t.type === 'income' ? '+' : t.type === 'expense' ? '−' : '';
+  const cls = t.type === 'income' ? 'pos' : t.type === 'expense' ? 'neg' : '';
+  const title = t.type === 'transfer' ? `${accName(t.account)} → ${accName(t.to)}` : (t.category || 'Other');
+  const sub = t.type === 'transfer' ? (t.note || 'Transfer') : `${accName(t.account)}${t.note ? ' · ' + t.note : ''}`;
+  const b = el('button', { class: 'item', type: 'button' },
+    el('div', { class: 'grow' }, el('div', { class: 't', text: title }), el('div', { class: 's', text: sub })),
+    el('div', { class: 'amt ' + cls, text: sign + inr(t.amount) }));
+  b.onclick = () => openTxn(t);
+  return b;
+}
+function empty(msg) { return el('div', { class: 'empty', text: msg }); }
+
+function render() {
+  // Home
+  $('#monthLabel').textContent = monthText();
+  $$('.monthLabel2').forEach(e => e.textContent = monthText());
+  const mt = state.txns.filter(inMonth);
+  const exp = mt.filter(t => t.type === 'expense').reduce((s, t) => s + t.amount, 0);
+  const inc = mt.filter(t => t.type === 'income').reduce((s, t) => s + t.amount, 0);
+  const net = state.accounts.reduce((s, a) => s + balance(a.id), 0);
+  $('#sumExp').textContent = inr(exp);
+  $('#sumInc').textContent = inr(inc);
+  $('#sumNet').textContent = inr(net);
+
+  const strip = $('#homeAccounts'); strip.replaceChildren();
+  state.accounts.forEach(a => {
+    const bal = balance(a.id);
+    strip.append(el('div', { class: 'acc-chip' }, el('small', { text: a.name }), el('b', { class: bal < 0 ? 'neg' : '', text: inr(bal) })));
+  });
+
+  const byCat = {};
+  mt.filter(t => t.type === 'expense').forEach(t => byCat[t.category || 'Other'] = (byCat[t.category || 'Other'] || 0) + t.amount);
+  const cats = Object.entries(byCat).sort((a, b) => b[1] - a[1]);
+  const bars = $('#catBars'); bars.replaceChildren();
+  if (!cats.length) bars.append(empty('No expenses this month'));
+  const max = cats.length ? cats[0][1] : 1;
+  cats.forEach(([c, v]) => {
+    const i = el('i'); i.style.width = Math.max(4, v / max * 100) + '%';
+    bars.append(el('div', { class: 'bar-row' }, el('span', { text: c }), el('div', { class: 'bar' }, i), el('b', { text: inr(v) })));
+  });
+
+  const recent = $('#recent'); recent.replaceChildren();
+  const r = sortTxns([...state.txns]).slice(0, 5);
+  if (!r.length) recent.append(empty('Tap + to add your first transaction'));
+  r.forEach(t => recent.append(txnItem(t)));
+
+  renderTxns(); renderAccounts(); renderCats(); fillAccountFilter();
+}
+
+function fillAccountFilter() {
+  const sel = $('#fAccount'), cur = sel.value;
+  sel.replaceChildren(el('option', { value: '', text: 'All accounts' }));
+  state.accounts.forEach(a => sel.append(el('option', { value: a.id, text: a.name })));
+  sel.value = state.accounts.some(a => a.id === cur) ? cur : '';
+}
+
+function renderTxns() {
+  const fa = $('#fAccount').value, ft = $('#fType').value, q = $('#fSearch').value.trim().toLowerCase();
+  const list = sortTxns(state.txns.filter(t => inMonth(t)
+    && (!fa || t.account === fa || t.to === fa)
+    && (!ft || t.type === ft)
+    && (!q || `${t.note || ''} ${t.category || ''}`.toLowerCase().includes(q))));
+  const box = $('#txnList'); box.replaceChildren();
+  if (!list.length) return box.append(empty('No transactions'));
+  let last = '';
+  list.forEach(t => {
+    if (t.date !== last) {
+      last = t.date;
+      const d = new Date(t.date + 'T00:00:00');
+      box.append(el('div', { class: 'day', text: d.toLocaleDateString('en-IN', { weekday: 'short', day: 'numeric', month: 'short' }) }));
+    }
+    box.append(txnItem(t));
+  });
+}
+
+function renderAccounts() {
+  const box = $('#accountList'); box.replaceChildren();
+  state.accounts.forEach(a => {
+    const bal = balance(a.id);
+    const b = el('button', { class: 'item', type: 'button' },
+      el('div', { class: 'grow' }, el('div', { class: 't', text: a.name }), el('div', { class: 's', text: a.type })),
+      el('div', { class: 'amt ' + (bal < 0 ? 'neg' : ''), text: inr(bal) }));
+    b.onclick = () => openAcc(a);
+    box.append(b);
+  });
+}
+
+function renderCats() {
+  const box = $('#catList'); box.replaceChildren();
+  state.categories.forEach(c => {
+    const x = el('button', { type: 'button', 'aria-label': 'Remove ' + c, text: '×' });
+    x.onclick = () => {
+      if (state.categories.length <= 1) return toast('Keep at least one category');
+      state.categories = state.categories.filter(k => k !== c); save();
+    };
+    box.append(el('span', { class: 'chip' }, c, x));
+  });
+}
+
+/* ---------- Transaction dialog ---------- */
+function setType(t) {
+  txnType = t;
+  $$('#typeSeg button').forEach(b => b.classList.toggle('on', b.dataset.type === t));
+  $('#toWrap').hidden = t !== 'transfer';
+  $('#catWrap').hidden = t === 'transfer';
+  $('#tAccLabel').textContent = t === 'transfer' ? 'From account' : 'Account';
+  $('#tTo').required = t === 'transfer';
+}
+function fillSelect(sel, items, value) {
+  sel.replaceChildren(...items.map(([v, l]) => el('option', { value: v, text: l })));
+  if (value != null) sel.value = value;
+}
+function openTxn(t) {
+  if (!state.accounts.length) { toast('Add an account first'); return switchView('accounts'); }
+  editingTxn = t || null;
+  const accs = state.accounts.map(a => [a.id, a.name]);
+  fillSelect($('#tAccount'), accs, t ? t.account : accs[0][0]);
+  fillSelect($('#tTo'), accs, t && t.to ? t.to : (accs[1] || accs[0])[0]);
+  const cats = [...state.categories]; if (t && t.category && !cats.includes(t.category)) cats.push(t.category);
+  fillSelect($('#tCategory'), cats.map(c => [c, c]), t ? t.category : cats[0]);
+  setType(t ? t.type : 'expense');
+  $('#tAmount').value = t ? t.amount : '';
+  $('#tDate').value = t ? t.date : todayStr();
+  $('#tNote').value = t ? (t.note || '') : '';
+  $('#txnTitle').textContent = t ? 'Edit transaction' : 'Add transaction';
+  $('#tDelete').hidden = !t;
+  $('#txnDialog').showModal();
+  if (!t) setTimeout(() => $('#tAmount').focus(), 50);
+}
+$('#typeSeg').addEventListener('click', e => { const b = e.target.closest('button'); if (b) setType(b.dataset.type); });
+$('#fab').onclick = () => openTxn();
+$('#tCancel').onclick = () => $('#txnDialog').close();
+$('#txnForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const amount = Math.round(parseFloat($('#tAmount').value) * 100) / 100;
+  if (!(amount > 0)) return toast('Enter a valid amount');
+  const t = {
+    id: editingTxn ? editingTxn.id : uid(), ts: editingTxn ? editingTxn.ts : Date.now(),
+    type: txnType, amount, account: $('#tAccount').value, date: $('#tDate').value, note: $('#tNote').value.trim()
+  };
+  if (txnType === 'transfer') {
+    t.to = $('#tTo').value;
+    if (t.to === t.account) return toast('Choose two different accounts');
+  } else t.category = $('#tCategory').value;
+  if (editingTxn) state.txns[state.txns.findIndex(x => x.id === t.id)] = t; else state.txns.push(t);
+  $('#txnDialog').close(); save(); toast('Saved');
+});
+$('#tDelete').onclick = () => {
+  if (!editingTxn || !confirm('Delete this transaction?')) return;
+  state.txns = state.txns.filter(x => x.id !== editingTxn.id);
+  $('#txnDialog').close(); save(); toast('Deleted');
+};
+
+/* ---------- Account dialog ---------- */
+function openAcc(a) {
+  editingAcc = a || null;
+  $('#accTitle').textContent = a ? 'Edit account' : 'Add account';
+  $('#aName').value = a ? a.name : '';
+  $('#aType').value = a ? a.type : 'Bank';
+  $('#aOpen').value = a ? a.opening : 0;
+  $('#aDelete').hidden = !a;
+  $('#accDialog').showModal();
+}
+$('#addAccountBtn').onclick = () => openAcc();
+$('#aCancel').onclick = () => $('#accDialog').close();
+$('#accForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const name = $('#aName').value.trim(); if (!name) return;
+  const data = { name, type: $('#aType').value, opening: parseFloat($('#aOpen').value) || 0 };
+  if (editingAcc) Object.assign(editingAcc, data); else state.accounts.push({ id: uid(), ...data });
+  $('#accDialog').close(); save(); toast('Saved');
+});
+$('#aDelete').onclick = () => {
+  if (!editingAcc) return;
+  if (state.txns.some(t => t.account === editingAcc.id || t.to === editingAcc.id)) return toast('Delete or move its transactions first');
+  if (!confirm(`Delete account "${editingAcc.name}"?`)) return;
+  state.accounts = state.accounts.filter(a => a.id !== editingAcc.id);
+  $('#accDialog').close(); save();
+};
+
+/* ---------- Navigation & filters ---------- */
+function switchView(v) {
+  $$('.view').forEach(s => s.classList.toggle('active', s.id === 'view-' + v));
+  $$('.tabs button').forEach(b => b.classList.toggle('active', b.dataset.view === v));
+  $('#fab').hidden = v === 'more';
+  window.scrollTo(0, 0);
+}
+$$('.tabs button').forEach(b => b.onclick = () => switchView(b.dataset.view));
+$$('[data-month]').forEach(b => b.onclick = () => { month.setMonth(month.getMonth() + Number(b.dataset.month)); render(); });
+['fAccount', 'fType', 'fSearch'].forEach(id => $('#' + id).addEventListener('input', renderTxns));
+
+/* ---------- Categories ---------- */
+$('#catForm').addEventListener('submit', e => {
+  e.preventDefault();
+  const c = $('#newCat').value.trim();
+  if (c && !state.categories.some(x => x.toLowerCase() === c.toLowerCase())) { state.categories.push(c); save(); }
+  $('#newCat').value = '';
+});
+
+/* ---------- Backup ---------- */
+function download(name, text, type) {
+  const a = el('a', { href: URL.createObjectURL(new Blob([text], { type })), download: name });
+  document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+$('#exportJson').onclick = () => download(`paisa-backup-${todayStr()}.json`, JSON.stringify(state, null, 2), 'application/json');
+$('#exportCsv').onclick = () => {
+  const esc = v => `"${String(v ?? '').replace(/"/g, '""')}"`;
+  const rows = [['Date', 'Type', 'Amount', 'Account', 'To account', 'Category', 'Note'].join(',')];
+  sortTxns([...state.txns]).forEach(t => rows.push([t.date, t.type, t.amount, accName(t.account), t.to ? accName(t.to) : '', t.category || '', t.note || ''].map(esc).join(',')));
+  download(`paisa-transactions-${todayStr()}.csv`, rows.join('\n'), 'text/csv');
+};
+$('#importJson').onchange = async e => {
+  const f = e.target.files[0]; if (!f) return;
+  try {
+    const s = JSON.parse(await f.text());
+    if (!Array.isArray(s.accounts) || !Array.isArray(s.txns)) throw 0;
+    if (!confirm('Replace all current data with this backup?')) return;
+    state = { accounts: s.accounts, txns: s.txns, categories: s.categories || [...DEFAULT_CATS] };
+    save(); toast('Backup restored');
+  } catch { toast('Invalid backup file'); }
+  e.target.value = '';
+};
+$('#resetBtn').onclick = () => { if (confirm('Erase ALL accounts and transactions from this device?')) { state = fresh(); save(); toast('All data erased'); } };
+
+/* ---------- Online / offline + PWA ---------- */
+function netStatus() {
+  const n = $('#net'), on = navigator.onLine;
+  n.textContent = on ? 'Online' : 'Offline'; n.className = 'net ' + (on ? 'online' : 'offline');
+}
+addEventListener('online', () => { netStatus(); toast('Back online'); });
+addEventListener('offline', () => { netStatus(); toast('Offline – everything still works'); });
+
+let deferred;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); deferred = e; $('#installBtn').hidden = false; });
+$('#installBtn').onclick = async () => { if (!deferred) return; deferred.prompt(); await deferred.userChoice; deferred = null; $('#installBtn').hidden = true; };
+
+if ('serviceWorker' in navigator) {
+  addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+}
+if (navigator.storage && navigator.storage.persist) navigator.storage.persist().catch(() => {});
+
+$('#verInfo').textContent = `Paisa Tracker ${VERSION} · data stays on this device`;
+netStatus(); render();
+})();
+</script>
+</body>
+</html>
